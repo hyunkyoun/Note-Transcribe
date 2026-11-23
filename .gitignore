@@ -1,0 +1,21 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Build output
+node_modules/
+dist/
+target/
+src-tauri/gen/
+src-tauri/libs/*
+!src-tauri/libs/README.txt
+
+# Models are large downloads (see models/README.md)
+models/*
+!models/README.md
+
+# Local transcripts / audio if you point the transcripts folder into the repo
+transcripts/
+*.wav
+*.log

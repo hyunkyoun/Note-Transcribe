@@ -1,0 +1,53 @@
+[package]
+name = "note-transcribe"
+description = "Passive meeting transcriber for Windows 11 (WASAPI loopback + mic, local Whisper, Claude summary, Discord)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+default-run = "note-transcribe"
+
+[lib]
+name = "note_transcribe_lib"
+crate-type = ["rlib"]
+
+[[bin]]
+name = "note-transcribe"
+path = "src/main.rs"
+
+[features]
+# CUDA is on by default (RTX GPUs). Build without it for a CPU-only binary:
+#   npm run tauri build -- -- --no-default-features
+default = ["cuda"]
+cuda = ["whisper-rs/cuda"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+meeting-core = { path = "../crates/meeting-core" }
+
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["time", "sync", "macros"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "stream", "native-tls"] }
+futures-util = "0.3"
+
+# Audio capture (WASAPI shared mode; an input stream on a render device = loopback)
+cpal = "0.16"
+hound = "3.5"
+
+# Local speech-to-text (whisper.cpp)
+whisper-rs = { version = "0.16", features = ["raw-api"] }
+# Silero VAD + speaker embeddings (sherpa-onnx, CPU). Dynamic libs are copied next to the exe.
+sherpa-rs = { version = "0.6.8", default-features = false, features = ["download-binaries"] }
+
+anyhow = "1"
+log = "0.4"
+parking_lot = "0.12"
+crossbeam-channel = "0.5"
+dirs = "6"
+dotenvy = "0.15"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+rand = "0.9"

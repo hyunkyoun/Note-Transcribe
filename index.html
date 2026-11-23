@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <title>Note Transcribe</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">Note Transcribe</div>
+      <div id="rec-indicator" class="rec-indicator idle" title="Recording status">
+        <span class="dot"></span><span id="rec-label">Idle</span><span id="rec-timer" class="timer">00:00:00</span>
+      </div>
+      <nav class="tabs">
+        <button class="tab active" data-view="live">Live</button>
+        <button class="tab" data-view="settings">Settings</button>
+      </nav>
+    </header>
+
+    <main>
+      <!-- ============ LIVE VIEW ============ -->
+      <section id="view-live" class="view active">
+        <div class="sources">
+          <div class="card source">
+            <label class="switch-row">
+              <input type="checkbox" id="live-capture-desktop" />
+              <span><strong>Desktop audio</strong> <small>(loopback: other participants)</small></span>
+            </label>
+            <select id="live-output-device" aria-label="Output device to capture"></select>
+          </div>
+          <div class="card source">
+            <label class="switch-row">
+              <input type="checkbox" id="live-capture-mic" />
+              <span><strong>Microphone</strong> <small id="mic-mode-hint"></small></span>
+            </label>
+            <select id="live-mic-device" aria-label="Microphone"></select>
+          </div>
+          <button id="refresh-devices" class="ghost" title="Re-scan audio devices">↻ Devices</button>
+        </div>
+
+        <div class="controls">
+          <button id="start-stop" class="primary big">● Start</button>
+          <div class="status-lines">
+            <div id="engine-status" class="muted">Whisper model loads when you press Start.</div>
+            <div id="queue-status" class="muted small"></div>
+          </div>
+        </div>
+
+        <div id="notices" class="notices"></div>
+
+        <div class="captions-wrap card">
+          <div id="captions" class="captions" aria-live="polite"></div>
+          <div id="partials" class="partials"></div>
+          <button id="jump-latest" class="jump hidden">↓ Latest</button>
+        </div>
+
+        <div id="meeting-panel" class="card meeting hidden">
+          <div class="meeting-head">
+            <h2>Meeting <span id="meeting-title"></span></h2>
+            <div class="row gap">
+              <button id="open-transcript" class="ghost">Open transcript</button>
+            </div>
+          </div>
+          <p class="muted small">Rename speakers before generating the summary. Names apply to the whole transcript, the summary and Discord.</p>
+          <table class="renames">
+            <thead><tr><th>Detected as</th><th>Name</th></tr></thead>
+            <tbody id="rename-rows"></tbody>
+          </table>
+          <div class="row gap wrap">
+            <button id="summarize" class="primary">Summarize &amp; send to Discord</button>
+            <button id="save-names" class="ghost">Save names</button>
+            <button id="send-transcript" class="ghost">Send transcript only</button>
+            <button id="resend" class="ghost">Re-send last summary to Discord</button>
+          </div>
+          <ul id="progress-log" class="progress-log"></ul>
+          <details id="summary-box" class="summary-box hidden">
+            <summary>Summary</summary>
+            <pre id="summary-text"></pre>
+          </details>
+        </div>
+      </section>
+
+      <!-- ============ SETTINGS VIEW ============ -->
+      <section id="view-settings" class="view">
+        <div class="settings-grid">
+          <fieldset class="card">
+            <legend>You</legend>
+            <label>My name <input type="text" data-setting="my_name" placeholder="Me" /></label>
+            <label class="switch-row">
+              <input type="checkbox" data-setting="mic_is_only_me" />
+              <span>Mic is only me
+                <small class="block muted">On: every mic segment is labelled with your name (no mic diarization).
+                Off: people sharing your mic are separated as "Mic Speaker 1", "Mic Speaker 2"…</small></span>
+            </label>
+          </fieldset>
+
+          <fieldset class="card">
+            <legend>Audio sources</legend>
+            <label class="switch-row"><input type="checkbox" data-setting="capture_desktop" /><span>Capture desktop audio (loopback)</span></label>
+            <label>Output device to capture <select id="set-output-device"></select></label>
+            <label class="switch-row"><input type="checkbox" data-setting="capture_mic" /><span>Capture microphone</span></label>
+            <label>Microphone <select id="set-mic-device"></select></label>
+          </fieldset>
+
+          <fieldset class="card">
+            <legend>Transcription (Whisper)</legend>
+            <label>Model
+              <input type="text" data-setting="whisper_model" list="model-list" placeholder="large-v3-turbo" />
+            </label>
+            <label>Fallback model <small class="muted">(used on CPU or if the main model is missing)</small>
+              <input type="text" data-setting="fallback_model" list="model-list" placeholder="base" />
+            </label>
+            <datalist id="model-list"></datalist>
+            <label class="switch-row"><input type="checkbox" data-setting="use_gpu" /><span>Use NVIDIA GPU (CUDA) when available</span></label>
+            <label>Language
+              <input type="text" data-setting="language" list="lang-list" placeholder="auto" />
+              <datalist id="lang-list">
+                <option value="auto">Auto-detect</option><option value="en">English</option><option value="ko">Korean</option>
+                <option value="ja">Japanese</option><option value="zh">Chinese</option><option value="es">Spanish</option>
+                <option value="fr">French</option><option value="de">German</option><option value="pt">Portuguese</option>
+                <option value="it">Italian</option><option value="nl">Dutch</option><option value="hi">Hindi</option>
+              </datalist>
+            </label>
+            <label>Vocabulary hint <small class="muted">(names, jargon; optional)</small>
+              <textarea data-setting="initial_prompt" rows="2" placeholder="Acme, Kubernetes, Dana Smith"></textarea>
+            </label>
+            <div id="model-info" class="muted small"></div>
+          </fieldset>
+
+          <fieldset class="card">
+            <legend>Speakers</legend>
+            <label>Same-speaker threshold <span id="thr-val" class="muted"></span>
+              <input type="range" min="0.2" max="0.9" step="0.05" data-setting="diarization_threshold" data-number />
+              <small class="muted">Lower = merge more (fewer speakers). Higher = split more.</small>
+            </label>
+            <label>Max speakers per stream <input type="number" min="1" max="20" data-setting="max_speakers" data-number /></label>
+            <label class="switch-row"><input type="checkbox" data-setting="suppress_mic_echo" /><span>Drop mic echo of desktop audio <small class="muted">(when using speakers instead of headphones)</small></span></label>
+          </fieldset>
+
+          <fieldset class="card">
+            <legend>After the meeting</legend>
+            <label class="switch-row"><input type="checkbox" data-setting="post_to_discord" /><span>Post summary + transcript to Discord</span></label>
+            <label class="switch-row"><input type="checkbox" data-setting="auto_summarize_on_stop" /><span>Summarize automatically on Stop <small class="muted">(skips renaming)</small></span></label>
+            <label class="switch-row"><input type="checkbox" data-setting="save_raw_audio" /><span>Save raw audio (16 kHz WAV per stream)</span></label>
+            <label class="switch-row"><input type="checkbox" data-setting="keep_model_loaded" /><span>Keep Whisper model in memory between meetings <small class="muted">(faster start, holds VRAM)</small></span></label>
+          </fieldset>
+
+          <fieldset class="card">
+            <legend>Display</legend>
+            <label>Caption font size <span id="font-val" class="muted"></span>
+              <input type="range" min="12" max="32" step="1" data-setting="caption_font_size" data-number />
+            </label>
+          </fieldset>
+
+          <fieldset class="card wide">
+            <legend>Files &amp; API keys</legend>
+            <label>Models folder <small class="muted">(empty = auto-detect)</small>
+              <div class="row gap"><input type="text" data-setting="models_dir" /><button class="ghost" data-open="models">Open</button></div>
+            </label>
+            <label>Transcripts folder <small class="muted">(empty = default)</small>
+              <div class="row gap"><input type="text" data-setting="transcripts_dir" /><button class="ghost" data-open="transcripts">Open</button></div>
+            </label>
+            <dl id="paths" class="paths"></dl>
+            <div class="row gap wrap">
+              <button class="ghost" data-open="prompt">Edit summary prompt</button>
+              <button class="ghost" data-open="env">Open .env</button>
+              <button class="ghost" id="reload-env">Reload .env</button>
+              <button class="ghost" data-open="data">Open data folder</button>
+            </div>
+          </fieldset>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
